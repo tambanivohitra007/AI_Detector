@@ -1,0 +1,34 @@
+{
+  "name": "ai-text-humanizer",
+  "version": "1.0.0",
+  "description": "AI-powered text humanizer - Transform AI-generated text into natural, human-like academic writing",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "NODE_ENV=production node src/server.js",
+    "dev": "nodemon src/server.js",
+    "prod": "NODE_ENV=production node src/server.js"
+  },
+  "keywords": [
+    "ai",
+    "humanizer",
+    "text",
+    "gpt-5",
+    "academic",
+    "writing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^2.6.1",
+    "dotenv": "^16.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
