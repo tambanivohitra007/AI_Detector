@@ -4,6 +4,7 @@
  */
 
 require('dotenv').config();
+const crypto = require('crypto');
 
 /**
  * Validate required environment variables
@@ -39,6 +40,10 @@ const config = {
     // Request limits
     requestSizeLimit: process.env.REQUEST_SIZE_LIMIT || '10mb',
     requestTimeout: parseInt(process.env.REQUEST_TIMEOUT || '60000', 10),
+
+    // Request signing
+    signingSecret: process.env.SIGNING_SECRET || crypto.randomBytes(32).toString('hex'),
+    tokenExpiryMs: parseInt(process.env.TOKEN_EXPIRY_MS || '900000', 10), // 15 minutes
 
     // Logging
     logLevel: process.env.LOG_LEVEL || 'info'

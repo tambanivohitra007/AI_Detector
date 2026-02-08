@@ -5,6 +5,7 @@
 
 const express = require('express');
 const openaiService = require('../services/openai');
+const { generateToken, requireSignedRequest } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -21,10 +22,19 @@ router.get('/health', (req, res) => {
 });
 
 /**
- * Rewrite/Humanize text endpoint
+ * Issue a signed request token
+ * GET /api/token
+ */
+router.get('/token', (req, res) => {
+    const tokenData = generateToken();
+    res.json(tokenData);
+});
+
+/**
+ * Rewrite/Humanize text endpoint (requires signed token)
  * POST /api/rewrite
  */
-router.post('/rewrite', async (req, res, next) => {
+router.post('/rewrite', requireSignedRequest, async (req, res, next) => {
     try {
         console.log('Received rewrite request');
         console.log('Model:', req.body.model);
@@ -49,6 +59,7 @@ router.get('/status', (req, res) => {
         version: '1.0.0',
         endpoints: {
             health: '/api/health',
+            token: '/api/token',
             rewrite: '/api/rewrite',
             status: '/api/status'
         }

@@ -15,6 +15,30 @@ const REASONING_MODELS = ['o1', 'o1-mini', 'o1-preview', 'o3', 'o3-mini', 'o4-mi
 export class APIService {
     constructor(config = {}) {
         this.config = { ...CONFIG, ...config };
+        this.token = null;
+        this.tokenTimestamp = null;
+        this.tokenExpiresAt = 0;
+    }
+
+    /**
+     * Fetch a signed token from the server
+     */
+    async fetchToken() {
+        const res = await fetch('/api/token');
+        if (!res.ok) throw new Error('Failed to obtain request token.');
+        const data = await res.json();
+        this.token = data.token;
+        this.tokenTimestamp = data.timestamp;
+        this.tokenExpiresAt = data.timestamp + data.expiresIn;
+    }
+
+    /**
+     * Ensure we have a valid (non-expired) token, refreshing if needed
+     */
+    async ensureToken() {
+        if (!this.token || Date.now() >= this.tokenExpiresAt - 30000) {
+            await this.fetchToken();
+        }
     }
 
     /**
@@ -71,10 +95,14 @@ export class APIService {
 
         while (attempts < this.config.MAX_RETRY_ATTEMPTS) {
             try {
+                await this.ensureToken();
+
                 const response = await fetch(this.config.API_URL, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-Request-Token': this.token,
+                        'X-Request-Timestamp': String(this.tokenTimestamp)
                     },
                     body: JSON.stringify(payload)
                 });
@@ -134,7 +162,10 @@ export class APIService {
      */
     async humanizeText(text, settings = {}) {
         const payload = this.buildPayload(text, settings);
-        return await this.makeRequest(payload);
+        const result = await this.makeRequest(payload);
+        // Pre-fetch a fresh token for the next request
+        this.fetchToken().catch(() => {});
+        return result;
     }
 
     /**

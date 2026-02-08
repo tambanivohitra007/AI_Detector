@@ -42,6 +42,13 @@ class App {
         // Apply default preset
         this.handlePresetClick(CONFIG.DEFAULT_PRESET);
 
+        // Pre-fetch signing token
+        try {
+            await this.api.fetchToken();
+        } catch (err) {
+            console.warn('Failed to pre-fetch signing token:', err);
+        }
+
         // Initial word count update
         this.ui.updateWordCount();
 
