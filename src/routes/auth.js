@@ -132,8 +132,10 @@ router.get('/microsoft/callback', async (req, res) => {
         }
 
         // Create session and redirect to app
+        const displayName = claims.name || email.split('@')[0];
         const token = createSession();
         res.cookie('session', token, getSessionCookieOptions());
+        res.cookie('user_name', displayName, { path: '/', maxAge: config.sessionExpiryMs, sameSite: 'lax' });
         res.redirect('/');
     } catch (err) {
         console.error('Microsoft OAuth callback error:', err);

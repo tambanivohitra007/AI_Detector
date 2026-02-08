@@ -41,6 +41,7 @@ router.post('/login', (req, res) => {
     if (safeCompare(username, config.authUsername) && safeCompare(password, config.authPassword)) {
         const token = createSession();
         res.cookie('session', token, getSessionCookieOptions());
+        res.cookie('user_name', 'Admin', { path: '/', maxAge: config.sessionExpiryMs, sameSite: 'lax' });
         return res.json({ success: true });
     }
 
@@ -53,6 +54,7 @@ router.post('/login', (req, res) => {
  */
 router.post('/logout', (req, res) => {
     res.clearCookie('session', { path: '/' });
+    res.clearCookie('user_name', { path: '/' });
     res.json({ success: true });
 });
 
