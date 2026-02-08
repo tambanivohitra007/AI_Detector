@@ -7,7 +7,8 @@ const express = require('express');
 const crypto = require('crypto');
 const fetch = require('node-fetch');
 const config = require('../config/env');
-const { createSession, getSessionCookieOptions } = require('../middleware/session');
+const audit = require('../services/audit');
+const { createSession, getSessionCookieOptions, parseCookies } = require('../middleware/session');
 
 const router = express.Router();
 
@@ -20,22 +21,6 @@ function decodeJWT(token) {
     if (parts.length !== 3) throw new Error('Invalid JWT format');
     const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     return JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
-}
-
-/**
- * Parse cookies from the Cookie header
- */
-function parseCookies(header) {
-    const cookies = {};
-    if (!header) return cookies;
-    header.split(';').forEach(pair => {
-        const idx = pair.indexOf('=');
-        if (idx < 0) return;
-        const key = pair.substring(0, idx).trim();
-        const val = pair.substring(idx + 1).trim();
-        cookies[key] = decodeURIComponent(val);
-    });
-    return cookies;
 }
 
 /**
@@ -128,6 +113,7 @@ router.get('/microsoft/callback', async (req, res) => {
 
         // Validate email domain
         if (config.allowedEmailDomain && !email.endsWith(`@${config.allowedEmailDomain}`)) {
+            audit.log('oauth_denied', { email, ip: audit.ip(req), reason: 'domain_not_allowed' });
             return res.redirect(`/login?error=${encodeURIComponent(`Only @${config.allowedEmailDomain} accounts are allowed`)}`);
         }
 
@@ -136,6 +122,7 @@ router.get('/microsoft/callback', async (req, res) => {
         const token = createSession();
         res.cookie('session', token, getSessionCookieOptions());
         res.cookie('user_name', displayName, { path: '/', maxAge: config.sessionExpiryMs, sameSite: 'lax' });
+        audit.log('login', { user: displayName, email, method: 'microsoft', ip: audit.ip(req) });
         res.redirect('/');
     } catch (err) {
         console.error('Microsoft OAuth callback error:', err);

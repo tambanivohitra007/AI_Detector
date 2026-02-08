@@ -5,6 +5,7 @@
 
 const express = require('express');
 const openaiService = require('../services/openai');
+const audit = require('../services/audit');
 const { generateToken, requireSignedRequest } = require('../middleware/auth');
 const { createSession, getSessionCookieOptions, safeCompare } = require('../middleware/session');
 const config = require('../config/env');
@@ -42,9 +43,11 @@ router.post('/login', (req, res) => {
         const token = createSession();
         res.cookie('session', token, getSessionCookieOptions());
         res.cookie('user_name', 'Admin', { path: '/', maxAge: config.sessionExpiryMs, sameSite: 'lax' });
+        audit.log('login', { user: 'Admin', method: 'password', ip: audit.ip(req) });
         return res.json({ success: true });
     }
 
+    audit.log('login_failed', { user: username, method: 'password', ip: audit.ip(req) });
     return res.status(401).json({ error: { message: 'Invalid username or password.' } });
 });
 
@@ -53,6 +56,7 @@ router.post('/login', (req, res) => {
  * POST /api/logout
  */
 router.post('/logout', (req, res) => {
+    audit.log('logout', { user: audit.userName(req), ip: audit.ip(req) });
     res.clearCookie('session', { path: '/' });
     res.clearCookie('user_name', { path: '/' });
     res.json({ success: true });
@@ -112,10 +116,17 @@ router.post('/rewrite', requireSignedRequest, async (req, res, next) => {
             if (typeof body[key] === 'number' && isFinite(body[key])) sanitized[key] = body[key];
         }
 
-        console.log('Received rewrite request');
-        console.log('Model:', sanitized.model);
-
         const result = await openaiService.humanizeText(sanitized);
+
+        audit.log('rewrite', {
+            user: audit.userName(req),
+            ip: audit.ip(req),
+            model: sanitized.model,
+            prompt_tokens: result.usage?.prompt_tokens,
+            completion_tokens: result.usage?.completion_tokens,
+            total_tokens: result.usage?.total_tokens
+        });
+
         res.json(result);
     } catch (error) {
         next(error);
