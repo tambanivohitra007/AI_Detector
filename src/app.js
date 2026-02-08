@@ -14,6 +14,7 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { requireAuth, parseCookies, isValidSession } = require('./middleware/session');
 const apiRoutes = require('./routes/api');
 const authRoutes = require('./routes/auth');
+const documentRoutes = require('./routes/document');
 const config = require('./config/env');
 
 /**
@@ -74,15 +75,25 @@ function createApp() {
     // OAuth routes (public — before auth gate)
     app.use('/auth', authRoutes);
 
+    const documentLimiter = rateLimit({
+        windowMs: 60 * 1000,  // 1 minute
+        max: 5,                // 5 document humanizations per minute
+        message: { error: { message: 'Too many document requests. Please slow down.' } },
+        standardHeaders: true,
+        legacyHeaders: false
+    });
+
     // Apply rate limiters to specific routes
     app.use('/api/login', loginLimiter);
     app.use('/api/rewrite', apiLimiter);
+    app.use('/api/document/humanize', documentLimiter);
 
     // Auth gate — everything below requires a valid session
     app.use(requireAuth);
 
     // API Routes (protected)
     app.use('/api', apiRoutes);
+    app.use('/api/document', documentRoutes);
 
     // Serve static files from public directory (protected)
     app.use(express.static(publicPath));

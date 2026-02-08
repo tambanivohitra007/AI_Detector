@@ -8,6 +8,7 @@ import { apiService } from './modules/api.js';
 import { validateText, formatErrorMessage, sanitizeHTML } from './modules/utils.js';
 import { CONFIG } from './modules/config.js';
 import { loadHistory, saveEntry, deleteEntry, clearHistory, timeAgo } from './modules/history.js';
+import { DocumentService } from './modules/document.js';
 
 /**
  * Application Controller
@@ -16,6 +17,8 @@ class App {
     constructor() {
         this.ui = uiManager;
         this.api = apiService;
+        this.doc = new DocumentService(apiService);
+        this.mode = 'text'; // 'text' or 'document'
     }
 
     /**
@@ -86,6 +89,56 @@ class App {
 
         this.renderHistory();
 
+        // Document mode wiring
+        this.modeTextBtn = document.getElementById('mode-text-btn');
+        this.modeDocBtn = document.getElementById('mode-doc-btn');
+        this.docUploadZone = document.getElementById('doc-upload-zone');
+        this.docDropzone = document.getElementById('doc-dropzone');
+        this.docFileInput = document.getElementById('doc-file-input');
+        this.docFileInfo = document.getElementById('doc-file-info');
+        this.docFilename = document.getElementById('doc-filename');
+        this.docStats = document.getElementById('doc-stats');
+        this.docRemoveBtn = document.getElementById('doc-remove-btn');
+
+        this.modeTextBtn.addEventListener('click', () => this.setMode('text'));
+        this.modeDocBtn.addEventListener('click', () => this.setMode('document'));
+
+        // Dropzone click
+        this.docDropzone.addEventListener('click', () => this.docFileInput.click());
+
+        // Drag events
+        this.docDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            this.docDropzone.classList.add('dropzone-active');
+        });
+        this.docDropzone.addEventListener('dragleave', () => {
+            this.docDropzone.classList.remove('dropzone-active');
+        });
+        this.docDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            this.docDropzone.classList.remove('dropzone-active');
+            const file = e.dataTransfer.files[0];
+            if (file) this.handleFileUpload(file);
+        });
+
+        // File input change
+        this.docFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) this.handleFileUpload(file);
+            e.target.value = '';
+        });
+
+        // Remove file
+        this.docRemoveBtn.addEventListener('click', () => {
+            this.doc.reset();
+            this.docFileInfo.classList.add('hidden');
+            this.docDropzone.classList.remove('hidden');
+            this.ui.elements.downloadBtn.classList.add('hidden');
+        });
+
+        // Download button
+        this.ui.elements.downloadBtn.addEventListener('click', () => this.handleDownload());
+
         console.log('Application initialized successfully');
     }
 
@@ -146,6 +199,11 @@ class App {
      * Handle rewrite button click
      */
     async handleRewrite() {
+        // Route to document humanization in document mode
+        if (this.mode === 'document') {
+            return this.handleDocumentHumanize();
+        }
+
         // Prevent multiple simultaneous requests
         if (this.ui.isProcessing()) {
             return;
@@ -211,6 +269,158 @@ class App {
     }
 
     /**
+     * Set input mode: 'text' or 'document'
+     */
+    setMode(mode) {
+        this.mode = mode;
+        const isText = mode === 'text';
+
+        // Toggle visibility
+        this.ui.elements.inputText.classList.toggle('hidden', !isText);
+        this.docUploadZone.classList.toggle('hidden', isText);
+
+        // Toggle active button styles
+        this.modeTextBtn.classList.toggle('bg-white', isText);
+        this.modeTextBtn.classList.toggle('shadow-sm', isText);
+        this.modeTextBtn.classList.toggle('text-gray-800', isText);
+        this.modeTextBtn.classList.toggle('text-gray-500', !isText);
+
+        this.modeDocBtn.classList.toggle('bg-white', !isText);
+        this.modeDocBtn.classList.toggle('shadow-sm', !isText);
+        this.modeDocBtn.classList.toggle('text-gray-800', !isText);
+        this.modeDocBtn.classList.toggle('text-gray-500', isText);
+
+        // Update button text
+        const rewriteBtn = this.ui.elements.rewriteBtn;
+        const svgHTML = rewriteBtn.querySelector('svg').outerHTML;
+        const kbdHTML = rewriteBtn.querySelector('kbd')?.outerHTML || '';
+        if (isText) {
+            rewriteBtn.innerHTML = `${svgHTML} Humanize Text ${kbdHTML}`;
+        } else {
+            rewriteBtn.innerHTML = `${svgHTML} Humanize Document ${kbdHTML}`;
+        }
+
+        // Hide download button when switching modes
+        this.ui.elements.downloadBtn.classList.add('hidden');
+        this.ui.elements.docProgressContainer.classList.add('hidden');
+    }
+
+    /**
+     * Handle file upload (validation + API call)
+     */
+    async handleFileUpload(file) {
+        if (!file.name.toLowerCase().endsWith('.docx')) {
+            this.ui.showToast('Please upload a .docx file', 'error');
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            this.ui.showToast('File too large. Maximum size is 10MB.', 'error');
+            return;
+        }
+
+        try {
+            this.docDropzone.classList.add('hidden');
+            this.docFileInfo.classList.remove('hidden');
+            this.docFilename.textContent = file.name;
+            this.docStats.textContent = 'Uploading...';
+
+            const result = await this.doc.uploadFile(file);
+
+            this.docStats.textContent = `${result.totalParagraphs} paragraphs, ${result.totalWords} words`;
+            this.ui.showToast('Document uploaded successfully', 'success');
+        } catch (error) {
+            this.docDropzone.classList.remove('hidden');
+            this.docFileInfo.classList.add('hidden');
+            this.ui.showToast(error.message || 'Upload failed', 'error');
+        }
+    }
+
+    /**
+     * Handle document humanization with SSE progress
+     */
+    async handleDocumentHumanize() {
+        if (!this.doc.hasDocument()) {
+            this.ui.showToast('Please upload a document first', 'error');
+            return;
+        }
+
+        this.ui.disableRewriteButton();
+        this.ui.showLoading();
+        this.ui.clearOutputText();
+        this.ui.showStatus('Processing document...', 'info');
+        this.ui.elements.downloadBtn.classList.add('hidden');
+
+        // Show progress bar
+        const progressContainer = this.ui.elements.docProgressContainer;
+        const progressBar = this.ui.elements.docProgressBar;
+        const progressLabel = this.ui.elements.docProgressLabel;
+        const progressPercent = this.ui.elements.docProgressPercent;
+        progressContainer.classList.remove('hidden');
+        progressBar.style.width = '0%';
+        progressPercent.textContent = '0%';
+        progressLabel.textContent = 'Starting...';
+
+        try {
+            const settings = this.ui.getHumanizationSettings();
+
+            const paragraphs = await this.doc.humanizeDocument(settings, ({ event, data }) => {
+                if (event === 'progress') {
+                    this.ui.hideLoading();
+                    if (data.status === 'starting') {
+                        progressLabel.textContent = `Processing ${data.totalChunks} chunk${data.totalChunks > 1 ? 's' : ''}...`;
+                    } else if (data.status === 'processing') {
+                        progressLabel.textContent = `Chunk ${data.chunk} of ${data.totalChunks}`;
+                        progressBar.style.width = `${data.percent}%`;
+                        progressPercent.textContent = `${data.percent}%`;
+                    } else if (data.status === 'completed') {
+                        progressBar.style.width = '100%';
+                        progressPercent.textContent = '100%';
+                        progressLabel.textContent = 'Complete!';
+                    }
+                } else if (event === 'error') {
+                    this.ui.showToast(`Chunk ${data.chunk || '?'} failed — using original text`, 'error');
+                } else if (event === 'complete') {
+                    this.ui.setOutputText(data.paragraphs.join('\n\n'));
+                    this.ui.showCopyButton();
+                    this.ui.showClearButton();
+                }
+            });
+
+            if (paragraphs.length > 0) {
+                this.ui.setOutputText(paragraphs.join('\n\n'));
+                this.ui.showCopyButton();
+                this.ui.showClearButton();
+                this.ui.elements.downloadBtn.classList.remove('hidden');
+                this.ui.showStatus('Document successfully humanized!', 'success');
+                this.ui.showToast('Document successfully humanized!', 'success');
+            }
+        } catch (error) {
+            console.error('Document humanization error:', error);
+            this.ui.showError(formatErrorMessage(error));
+            this.ui.showStatus('Failed to humanize document.', 'error');
+            this.ui.showToast('Failed to humanize document', 'error');
+        } finally {
+            this.ui.enableRewriteButton();
+            this.ui.hideLoading();
+        }
+    }
+
+    /**
+     * Handle .docx download
+     */
+    async handleDownload() {
+        try {
+            this.ui.showToast('Generating document...', 'info');
+            await this.doc.downloadDocx();
+            this.ui.showToast('Document downloaded!', 'success');
+        } catch (error) {
+            console.error('Download error:', error);
+            this.ui.showToast(error.message || 'Download failed', 'error');
+        }
+    }
+
+    /**
      * Handle copy button click
      */
     async handleCopy() {
@@ -230,6 +440,13 @@ class App {
      */
     handleClear() {
         this.ui.clearAll();
+        this.ui.elements.downloadBtn.classList.add('hidden');
+        this.ui.elements.docProgressContainer.classList.add('hidden');
+        if (this.mode === 'document') {
+            this.doc.reset();
+            this.docFileInfo.classList.add('hidden');
+            this.docDropzone.classList.remove('hidden');
+        }
     }
 
     /**

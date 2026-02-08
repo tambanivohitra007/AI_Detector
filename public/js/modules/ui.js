@@ -41,7 +41,12 @@ export class UIManager {
             logoutBtn: 'logout-btn',
             inputCharCount: 'input-char-count',
             outputWordCount: 'output-word-count',
-            toastContainer: 'toast-container'
+            toastContainer: 'toast-container',
+            downloadBtn: 'download-btn',
+            docProgressContainer: 'doc-progress-container',
+            docProgressBar: 'doc-progress-bar',
+            docProgressLabel: 'doc-progress-label',
+            docProgressPercent: 'doc-progress-percent'
         };
 
         // Cache all elements with validation

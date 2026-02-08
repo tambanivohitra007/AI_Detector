@@ -173,3 +173,25 @@ kbd {
 textarea:focus {
     outline: none;
 }
+
+/* ── Dropzone drag-active ── */
+.dropzone-active {
+    border-color: #6366f1 !important;
+    background-color: rgba(99, 102, 241, 0.08) !important;
+}
+
+/* ── Document progress bar ── */
+.doc-progress-bar {
+    transition: width 0.4s ease;
+}
+
+/* ── Download button pulse on appear ── */
+.download-btn-appear {
+    animation: downloadPulse 0.6s ease-out;
+}
+
+@keyframes downloadPulse {
+    0% { transform: scale(0.9); opacity: 0; }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); opacity: 1; }
+}

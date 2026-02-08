@@ -96,6 +96,11 @@ const config = {
     signingSecret: process.env.SIGNING_SECRET || getOrCreateSigningSecret(),
     tokenExpiryMs: parseInt(process.env.TOKEN_EXPIRY_MS || '900000', 10), // 15 minutes
 
+    // Document processing
+    docxMaxFileSize: parseInt(process.env.DOCX_MAX_FILE_SIZE || '10485760', 10),
+    docxChunkTargetWords: parseInt(process.env.DOCX_CHUNK_TARGET_WORDS || '1200', 10),
+    docxMaxOutputTokens: parseInt(process.env.DOCX_MAX_OUTPUT_TOKENS || '8192', 10),
+
     // Logging
     logLevel: process.env.LOG_LEVEL || 'info'
 };
