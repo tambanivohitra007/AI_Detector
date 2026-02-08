@@ -17,10 +17,11 @@ export class APIService {
     /**
      * Build API payload
      * @param {string} text - Text to humanize
+     * @param {Object} settings - Humanization settings (temperature, top_p, frequency_penalty, presence_penalty)
      * @returns {Object} API payload
      */
-    buildPayload(text) {
-        return {
+    buildPayload(text, settings = {}) {
+        const payload = {
             model: this.config.MODEL,
             messages: [
                 {
@@ -36,6 +37,13 @@ export class APIService {
             reasoning_effort: this.config.REASONING_EFFORT,
             verbosity: this.config.VERBOSITY
         };
+
+        if (settings.temperature !== undefined) payload.temperature = settings.temperature;
+        if (settings.top_p !== undefined) payload.top_p = settings.top_p;
+        if (settings.frequency_penalty !== undefined) payload.frequency_penalty = settings.frequency_penalty;
+        if (settings.presence_penalty !== undefined) payload.presence_penalty = settings.presence_penalty;
+
+        return payload;
     }
 
     /**
@@ -107,10 +115,11 @@ export class APIService {
     /**
      * Humanize text using API
      * @param {string} text - Text to humanize
+     * @param {Object} settings - Humanization settings
      * @returns {Promise<string>} Humanized text
      */
-    async humanizeText(text) {
-        const payload = this.buildPayload(text);
+    async humanizeText(text, settings = {}) {
+        const payload = this.buildPayload(text, settings);
         return await this.makeRequest(payload);
     }
 

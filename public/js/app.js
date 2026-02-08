@@ -6,6 +6,7 @@
 import { uiManager } from './modules/ui.js';
 import { apiService } from './modules/api.js';
 import { validateText, formatErrorMessage } from './modules/utils.js';
+import { CONFIG } from './modules/config.js';
 
 /**
  * Application Controller
@@ -32,8 +33,14 @@ class App {
             onInput: () => this.handleInput(),
             onRewrite: () => this.handleRewrite(),
             onCopy: () => this.handleCopy(),
-            onClear: () => this.handleClear()
+            onClear: () => this.handleClear(),
+            onSettingsToggle: () => this.handleSettingsToggle(),
+            onSliderChange: (slider) => this.handleSliderChange(slider),
+            onPresetClick: (preset) => this.handlePresetClick(preset)
         });
+
+        // Apply default preset
+        this.handlePresetClick(CONFIG.DEFAULT_PRESET);
 
         // Initial word count update
         this.ui.updateWordCount();
@@ -46,6 +53,52 @@ class App {
      */
     handleInput() {
         this.ui.updateWordCount();
+    }
+
+    /**
+     * Handle settings panel toggle
+     */
+    handleSettingsToggle() {
+        this.ui.toggleSettings();
+    }
+
+    /**
+     * Handle slider value change
+     * @param {string} slider - 'perplexity' or 'burstiness'
+     */
+    handleSliderChange(slider) {
+        this.ui.updateSliderDisplay(slider);
+        const matchingPreset = this.findMatchingPreset();
+        this.ui.updatePresetButtons(matchingPreset);
+    }
+
+    /**
+     * Handle preset button click
+     * @param {string} presetName - Preset key from CONFIG.PRESETS
+     */
+    handlePresetClick(presetName) {
+        const preset = CONFIG.PRESETS[presetName];
+        if (!preset) return;
+        this.ui.applyPreset(preset);
+        this.ui.updatePresetButtons(presetName);
+    }
+
+    /**
+     * Find which preset matches the current slider values, if any
+     * @returns {string|null} Matching preset key or null
+     */
+    findMatchingPreset() {
+        const temperature = this.ui.getPerplexity();
+        const frequencyPenalty = this.ui.getBurstiness();
+        const tolerance = 0.01;
+
+        for (const [name, preset] of Object.entries(CONFIG.PRESETS)) {
+            if (Math.abs(preset.temperature - temperature) < tolerance &&
+                Math.abs(preset.frequencyPenalty - frequencyPenalty) < tolerance) {
+                return name;
+            }
+        }
+        return null;
     }
 
     /**
@@ -73,8 +126,11 @@ class App {
         this.ui.showStatus('Processing...', 'info');
 
         try {
+            // Get humanization settings from sliders
+            const settings = this.ui.getHumanizationSettings();
+
             // Call API to humanize text
-            const humanizedText = await this.api.humanizeText(inputText);
+            const humanizedText = await this.api.humanizeText(inputText, settings);
 
             // Display results
             this.ui.setOutputText(humanizedText);

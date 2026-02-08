@@ -27,6 +27,79 @@
             </div>
         </header>
 
+        <!-- Humanization Settings Panel -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+            <button
+                id="settings-toggle"
+                class="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors duration-200"
+            >
+                <svg id="settings-chevron" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+                Humanization Settings
+            </button>
+
+            <div id="settings-panel" class="hidden mt-3 bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+                <!-- Preset Buttons -->
+                <div class="flex flex-wrap gap-2 mb-6">
+                    <button data-preset="balanced" class="preset-btn px-4 py-2 text-sm font-medium rounded-lg border-2 border-indigo-600 bg-indigo-600 text-white transition-colors duration-200">
+                        Balanced
+                    </button>
+                    <button data-preset="maxHuman" class="preset-btn px-4 py-2 text-sm font-medium rounded-lg border-2 border-gray-300 text-gray-700 hover:border-indigo-400 transition-colors duration-200">
+                        Maximum Human-like
+                    </button>
+                    <button data-preset="conservative" class="preset-btn px-4 py-2 text-sm font-medium rounded-lg border-2 border-gray-300 text-gray-700 hover:border-indigo-400 transition-colors duration-200">
+                        Conservative
+                    </button>
+                </div>
+
+                <!-- Sliders -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Perplexity Slider -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-gray-700">Perplexity</label>
+                            <span id="perplexity-value" class="text-sm font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">1.20</span>
+                        </div>
+                        <input
+                            id="perplexity-slider"
+                            type="range"
+                            min="0"
+                            max="2"
+                            step="0.05"
+                            value="1.2"
+                            class="range-slider w-full"
+                        >
+                        <div class="flex justify-between text-xs text-gray-400 mt-1">
+                            <span>Predictable</span>
+                            <span>Varied</span>
+                        </div>
+                    </div>
+
+                    <!-- Burstiness Slider -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-sm font-medium text-gray-700">Burstiness</label>
+                            <span id="burstiness-value" class="text-sm font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">0.60</span>
+                        </div>
+                        <input
+                            id="burstiness-slider"
+                            type="range"
+                            min="0"
+                            max="2"
+                            step="0.05"
+                            value="0.6"
+                            class="range-slider w-full"
+                        >
+                        <div class="flex justify-between text-xs text-gray-400 mt-1">
+                            <span>Uniform</span>
+                            <span>Dynamic</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">

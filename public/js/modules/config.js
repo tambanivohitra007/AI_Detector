@@ -18,6 +18,20 @@ export const CONFIG = {
     MAX_RETRY_ATTEMPTS: 3,
     INITIAL_RETRY_DELAY: 1000,
 
+    // Humanization Parameters
+    TEMPERATURE: 1.2,
+    TOP_P: 0.91,
+    FREQUENCY_PENALTY: 0.6,
+    PRESENCE_PENALTY: 0.4,
+
+    // Humanization Presets
+    PRESETS: {
+        balanced: { temperature: 1.2, frequencyPenalty: 0.6 },
+        maxHuman: { temperature: 1.6, frequencyPenalty: 1.0 },
+        conservative: { temperature: 0.8, frequencyPenalty: 0.3 }
+    },
+    DEFAULT_PRESET: 'balanced',
+
     // UI Settings
     COPY_FEEDBACK_DURATION: 2000,
 

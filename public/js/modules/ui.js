@@ -30,7 +30,14 @@ export class UIManager {
             clearBtn: 'clear-btn',
             wordCountValue: 'word-count-value',
             statusMessage: 'status-message',
-            loadingSpinner: 'loading-spinner'
+            loadingSpinner: 'loading-spinner',
+            settingsToggle: 'settings-toggle',
+            settingsPanel: 'settings-panel',
+            settingsChevron: 'settings-chevron',
+            perplexitySlider: 'perplexity-slider',
+            perplexityValue: 'perplexity-value',
+            burstinessSlider: 'burstiness-slider',
+            burstinessValue: 'burstiness-value'
         };
 
         // Cache all elements with validation
@@ -206,6 +213,90 @@ export class UIManager {
     }
 
     /**
+     * Toggle settings panel visibility
+     */
+    toggleSettings() {
+        this.elements.settingsPanel.classList.toggle('hidden');
+        this.elements.settingsChevron.classList.toggle('rotate-180');
+    }
+
+    /**
+     * Get perplexity slider value
+     * @returns {number}
+     */
+    getPerplexity() {
+        return parseFloat(this.elements.perplexitySlider.value);
+    }
+
+    /**
+     * Get burstiness slider value
+     * @returns {number}
+     */
+    getBurstiness() {
+        return parseFloat(this.elements.burstinessSlider.value);
+    }
+
+    /**
+     * Compute derived API parameters from slider values
+     * @returns {Object} { temperature, top_p, frequency_penalty, presence_penalty }
+     */
+    getHumanizationSettings() {
+        const temperature = this.getPerplexity();
+        const topP = Math.min(1.0, Math.max(0.5, 1.0 - temperature * 0.075));
+        const frequencyPenalty = this.getBurstiness();
+        const presencePenalty = Math.min(2, Math.max(-2, frequencyPenalty * 0.667));
+
+        return {
+            temperature,
+            top_p: parseFloat(topP.toFixed(3)),
+            frequency_penalty: frequencyPenalty,
+            presence_penalty: parseFloat(presencePenalty.toFixed(3))
+        };
+    }
+
+    /**
+     * Update a slider's displayed value badge
+     * @param {string} slider - 'perplexity' or 'burstiness'
+     */
+    updateSliderDisplay(slider) {
+        if (slider === 'perplexity') {
+            this.elements.perplexityValue.textContent = parseFloat(this.elements.perplexitySlider.value).toFixed(2);
+        } else if (slider === 'burstiness') {
+            this.elements.burstinessValue.textContent = parseFloat(this.elements.burstinessSlider.value).toFixed(2);
+        }
+    }
+
+    /**
+     * Apply a preset to the sliders
+     * @param {Object} preset - { temperature, frequencyPenalty }
+     */
+    applyPreset(preset) {
+        this.elements.perplexitySlider.value = preset.temperature;
+        this.elements.burstinessSlider.value = preset.frequencyPenalty;
+        this.updateSliderDisplay('perplexity');
+        this.updateSliderDisplay('burstiness');
+    }
+
+    /**
+     * Highlight the active preset button, deactivate others
+     * @param {string|null} presetName - Active preset key, or null for none
+     */
+    updatePresetButtons(presetName) {
+        const buttons = document.querySelectorAll('.preset-btn');
+        buttons.forEach(btn => {
+            const isActive = btn.dataset.preset === presetName;
+            btn.classList.toggle('active', isActive);
+            if (isActive) {
+                btn.classList.add('border-indigo-600', 'bg-indigo-600', 'text-white');
+                btn.classList.remove('border-gray-300', 'text-gray-700');
+            } else {
+                btn.classList.remove('border-indigo-600', 'bg-indigo-600', 'text-white');
+                btn.classList.add('border-gray-300', 'text-gray-700');
+            }
+        });
+    }
+
+    /**
      * Clear all inputs and outputs
      */
     clearAll() {
@@ -236,6 +327,21 @@ export class UIManager {
 
         if (handlers.onClear) {
             this.elements.clearBtn.addEventListener('click', handlers.onClear);
+        }
+
+        if (handlers.onSettingsToggle) {
+            this.elements.settingsToggle.addEventListener('click', handlers.onSettingsToggle);
+        }
+
+        if (handlers.onSliderChange) {
+            this.elements.perplexitySlider.addEventListener('input', () => handlers.onSliderChange('perplexity'));
+            this.elements.burstinessSlider.addEventListener('input', () => handlers.onSliderChange('burstiness'));
+        }
+
+        if (handlers.onPresetClick) {
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.addEventListener('click', () => handlers.onPresetClick(btn.dataset.preset));
+            });
         }
     }
 }
