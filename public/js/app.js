@@ -64,7 +64,7 @@ class App {
         this.historyCount = document.getElementById('history-count');
 
         this.historyToggle.addEventListener('click', () => {
-            this.historyPanel.classList.toggle('hidden');
+            this.historyPanel.classList.toggle('open');
             this.historyChevron.classList.toggle('rotate-180');
         });
 
@@ -156,6 +156,7 @@ class App {
         const validation = validateText(inputText);
 
         if (!validation.valid) {
+            this.ui.showToast(validation.message, 'error');
             this.ui.showStatus(validation.message, 'error');
             return;
         }
@@ -172,6 +173,7 @@ class App {
 
             // Stream humanized text into the output panel
             this.ui.setOutputText('');
+            this.ui.showStreamingCursor();
             this.ui.showStatus('Streaming...', 'info');
 
             const humanizedText = await this.api.humanizeTextStream(
@@ -184,10 +186,12 @@ class App {
             );
 
             // Display results
+            this.ui.hideStreamingCursor();
             this.ui.setOutputText(humanizedText);
             this.ui.showCopyButton();
             this.ui.showClearButton();
-            this.ui.showStatus('✓ Text successfully humanized!', 'success');
+            this.ui.showStatus('Text successfully humanized!', 'success');
+            this.ui.showToast('Text successfully humanized!', 'success');
 
             // Save to history
             saveEntry(inputText, humanizedText);
@@ -197,10 +201,12 @@ class App {
             const errorMessage = formatErrorMessage(error);
             this.ui.showError(errorMessage);
             this.ui.showStatus('Failed to humanize text. Please try again.', 'error');
+            this.ui.showToast('Failed to humanize text', 'error');
         } finally {
             // Reset UI state
             this.ui.enableRewriteButton();
             this.ui.hideLoading();
+            this.ui.hideStreamingCursor();
         }
     }
 
@@ -211,9 +217,11 @@ class App {
         const success = await this.ui.copyToClipboard();
 
         if (success) {
-            this.ui.showStatus('✓ Copied to clipboard!', 'success');
+            this.ui.showStatus('Copied to clipboard!', 'success');
+            this.ui.showToast('Copied to clipboard!', 'success');
         } else {
             this.ui.showStatus('Failed to copy text.', 'error');
+            this.ui.showToast('Failed to copy text', 'error');
         }
     }
 

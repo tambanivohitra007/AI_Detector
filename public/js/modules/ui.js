@@ -38,7 +38,10 @@ export class UIManager {
             perplexityValue: 'perplexity-value',
             burstinessSlider: 'burstiness-slider',
             burstinessValue: 'burstiness-value',
-            logoutBtn: 'logout-btn'
+            logoutBtn: 'logout-btn',
+            inputCharCount: 'input-char-count',
+            outputWordCount: 'output-word-count',
+            toastContainer: 'toast-container'
         };
 
         // Cache all elements with validation
@@ -68,6 +71,7 @@ export class UIManager {
      */
     setOutputText(text) {
         this.elements.outputText.textContent = text;
+        this.updateOutputWordCount(text);
     }
 
     /**
@@ -79,10 +83,17 @@ export class UIManager {
     }
 
     /**
-     * Clear output text
+     * Clear output text and show the empty-state placeholder
      */
     clearOutputText() {
-        this.setOutputHTML('<span class="text-gray-400 italic">Your humanized text will appear here...</span>');
+        this.setOutputHTML(`
+            <div class="flex flex-col items-center justify-center h-full min-h-[200px] text-center">
+                <svg class="w-10 h-10 text-gray-200 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                <p class="text-gray-300 text-sm">Your humanized text will appear here</p>
+                <p class="text-gray-200 text-xs mt-1">Results stream in real-time</p>
+            </div>
+        `);
+        this.updateOutputWordCount('');
     }
 
     /**
@@ -92,6 +103,24 @@ export class UIManager {
         const text = this.getInputText();
         const wordCount = countWords(text);
         this.elements.wordCountValue.textContent = wordCount;
+        this.updateInputCharCount();
+    }
+
+    /**
+     * Update input character count display
+     */
+    updateInputCharCount() {
+        const len = this.elements.inputText.value.length;
+        this.elements.inputCharCount.textContent = len > 0 ? `${len.toLocaleString()} chars` : '';
+    }
+
+    /**
+     * Update output word count display
+     * @param {string} text
+     */
+    updateOutputWordCount(text) {
+        const wc = countWords(text || '');
+        this.elements.outputWordCount.textContent = wc > 0 ? `${wc} words` : '';
     }
 
     /**
@@ -214,10 +243,10 @@ export class UIManager {
     }
 
     /**
-     * Toggle settings panel visibility
+     * Toggle settings panel visibility (animated)
      */
     toggleSettings() {
-        this.elements.settingsPanel.classList.toggle('hidden');
+        this.elements.settingsPanel.classList.toggle('open');
         this.elements.settingsChevron.classList.toggle('rotate-180');
     }
 
@@ -295,6 +324,33 @@ export class UIManager {
                 btn.classList.add('border-gray-300', 'text-gray-700');
             }
         });
+    }
+
+    /**
+     * Add streaming cursor to output
+     */
+    showStreamingCursor() {
+        this.elements.outputText.classList.add('streaming-cursor');
+    }
+
+    /**
+     * Remove streaming cursor from output
+     */
+    hideStreamingCursor() {
+        this.elements.outputText.classList.remove('streaming-cursor');
+    }
+
+    /**
+     * Show a toast notification
+     * @param {string} message
+     * @param {'success'|'error'|'info'} type
+     */
+    showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        this.elements.toastContainer.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
     }
 
     /**
