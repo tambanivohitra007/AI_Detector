@@ -4,7 +4,13 @@
       "Bash(dir:*)",
       "Bash(node -e:*)",
       "Bash(npm install:*)",
-      "Bash(npx jest:*)"
+      "Bash(npx jest:*)",
+      "WebSearch",
+      "WebFetch(domain:hestiacp.com)",
+      "WebFetch(domain:forum.hestiacp.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(git update-index:*)",
+      "Bash(git add:*)"
     ]
   }
 }
