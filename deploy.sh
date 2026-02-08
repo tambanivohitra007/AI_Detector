@@ -59,8 +59,15 @@ if ! id "$HESTIA_USER" &>/dev/null; then
     fail "User '${HESTIA_USER}' does not exist."
 fi
 
+# Create domain in HestiaCP if it doesn't exist yet
+if ! /usr/local/hestia/bin/v-list-web-domain "$HESTIA_USER" "$DOMAIN" &>/dev/null; then
+    info "Domain '${DOMAIN}' not found in HestiaCP — creating it now..."
+    /usr/local/hestia/bin/v-add-web-domain "$HESTIA_USER" "$DOMAIN"
+    ok "Domain created in HestiaCP"
+fi
+
 if [ ! -d "$DOMAIN_DIR" ]; then
-    fail "Domain directory not found: ${DOMAIN_DIR}\nCreate the domain in HestiaCP panel first."
+    fail "Domain directory not found: ${DOMAIN_DIR}\nSomething went wrong creating the domain."
 fi
 
 echo ""
@@ -274,13 +281,8 @@ ok "Templates installed: nodeapp.tpl / nodeapp.stpl"
 
 # ── Step 8: Apply template to domain ──────────────────────
 info "Applying 'nodeapp' template to ${DOMAIN}..."
-
-if /usr/local/hestia/bin/v-list-web-domain "$HESTIA_USER" "$DOMAIN" &>/dev/null; then
-    /usr/local/hestia/bin/${TPL_COMMAND} "$HESTIA_USER" "$DOMAIN" "nodeapp"
-    ok "Template applied via ${TPL_COMMAND}"
-else
-    fail "Domain '${DOMAIN}' not found in HestiaCP. Create it in the panel first."
-fi
+/usr/local/hestia/bin/${TPL_COMMAND} "$HESTIA_USER" "$DOMAIN" "nodeapp"
+ok "Template applied via ${TPL_COMMAND}"
 
 # ── Step 9: Enable SSL (Let's Encrypt) ────────────────────
 info "Checking SSL..."
@@ -298,9 +300,10 @@ fi
 # ── Step 10: Start app with PM2 ───────────────────────────
 info "Starting app with PM2..."
 
-su - "$HESTIA_USER" -c "pm2 delete ${PM2_APP_NAME} 2>/dev/null || true"
-su - "$HESTIA_USER" -c "cd ${APP_DIR} && PORT=${APP_PORT} NODE_ENV=production pm2 start src/server.js --name ${PM2_APP_NAME}"
-su - "$HESTIA_USER" -c "pm2 save"
+# HestiaCP users have /usr/sbin/nologin — must use -s /bin/bash
+su -s /bin/bash "$HESTIA_USER" -c "pm2 delete ${PM2_APP_NAME} 2>/dev/null || true"
+su -s /bin/bash "$HESTIA_USER" -c "cd ${APP_DIR} && PORT=${APP_PORT} NODE_ENV=production pm2 start src/server.js --name ${PM2_APP_NAME}"
+su -s /bin/bash "$HESTIA_USER" -c "pm2 save"
 
 # PM2 startup: survives server reboot
 env PATH="$PATH:/usr/bin" pm2 startup systemd -u "$HESTIA_USER" --hp "$HOME_DIR" 2>/dev/null || true
@@ -322,14 +325,14 @@ echo "  URL:       https://${DOMAIN}"
 echo "  App dir:   ${APP_DIR}"
 echo "  PM2 name:  ${PM2_APP_NAME}"
 echo ""
-echo "  Useful commands (as ${HESTIA_USER}):"
-echo "    pm2 logs ${PM2_APP_NAME}"
-echo "    pm2 restart ${PM2_APP_NAME}"
-echo "    pm2 monit"
+echo "  Useful commands (run as root):"
+echo "    su -s /bin/bash ${HESTIA_USER} -c 'pm2 logs ${PM2_APP_NAME}'"
+echo "    su -s /bin/bash ${HESTIA_USER} -c 'pm2 restart ${PM2_APP_NAME}'"
+echo "    su -s /bin/bash ${HESTIA_USER} -c 'pm2 monit'"
 echo ""
 echo "  Redeploy after changes:"
 echo "    cd ${APP_DIR} && git pull"
 echo "    npm ci --production"
-echo "    pm2 restart ${PM2_APP_NAME}"
+echo "    su -s /bin/bash ${HESTIA_USER} -c 'pm2 restart ${PM2_APP_NAME}'"
 echo "=================================================="
 echo ""
