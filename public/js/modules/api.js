@@ -6,12 +6,23 @@
 import { CONFIG } from './config.js';
 import { sleep } from './utils.js';
 
+// Reasoning models that don't support sampling parameters
+const REASONING_MODELS = ['o1', 'o1-mini', 'o1-preview', 'o3', 'o3-mini', 'o4-mini', 'gpt-5'];
+
 /**
  * API Service class for handling OpenAI requests
  */
 export class APIService {
     constructor(config = {}) {
         this.config = { ...CONFIG, ...config };
+    }
+
+    /**
+     * Check if the current model is a reasoning model
+     * @returns {boolean}
+     */
+    isReasoningModel() {
+        return REASONING_MODELS.some(m => this.config.MODEL.startsWith(m));
     }
 
     /**
@@ -38,10 +49,13 @@ export class APIService {
             verbosity: this.config.VERBOSITY
         };
 
-        if (settings.temperature !== undefined) payload.temperature = settings.temperature;
-        if (settings.top_p !== undefined) payload.top_p = settings.top_p;
-        if (settings.frequency_penalty !== undefined) payload.frequency_penalty = settings.frequency_penalty;
-        if (settings.presence_penalty !== undefined) payload.presence_penalty = settings.presence_penalty;
+        // Only inject sampling params for models that support them
+        if (!this.isReasoningModel()) {
+            if (settings.temperature !== undefined) payload.temperature = settings.temperature;
+            if (settings.top_p !== undefined) payload.top_p = settings.top_p;
+            if (settings.frequency_penalty !== undefined) payload.frequency_penalty = settings.frequency_penalty;
+            if (settings.presence_penalty !== undefined) payload.presence_penalty = settings.presence_penalty;
+        }
 
         return payload;
     }
