@@ -5,6 +5,8 @@
 
 const express = require('express');
 const path = require('path');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const corsMiddleware = require('./middleware/cors');
 const logger = require('./middleware/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
@@ -23,11 +25,42 @@ function createApp() {
     // Trust proxy (important for deployment behind reverse proxies)
     app.set('trust proxy', 1);
 
+    // Security headers
+    app.use(helmet({
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+                styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+                fontSrc: ["'self'", "https://fonts.gstatic.com"],
+                imgSrc: ["'self'", "data:"],
+                connectSrc: ["'self'"]
+            }
+        }
+    }));
+
     // Apply middleware in order
     app.use(corsMiddleware);
     app.use(express.json({ limit: config.requestSizeLimit }));
     app.use(express.urlencoded({ extended: true, limit: config.requestSizeLimit }));
     app.use(logger);
+
+    // Rate limiters
+    const loginLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000, // 15 minutes
+        max: 10,                   // 10 attempts per window
+        message: { error: { message: 'Too many login attempts. Please try again later.' } },
+        standardHeaders: true,
+        legacyHeaders: false
+    });
+
+    const apiLimiter = rateLimit({
+        windowMs: 60 * 1000,  // 1 minute
+        max: 20,               // 20 requests per minute
+        message: { error: { message: 'Too many requests. Please slow down.' } },
+        standardHeaders: true,
+        legacyHeaders: false
+    });
 
     // Login page (public — redirect to / if already authenticated)
     app.get('/login', (req, res) => {
@@ -38,6 +71,10 @@ function createApp() {
 
     // OAuth routes (public — before auth gate)
     app.use('/auth', authRoutes);
+
+    // Apply rate limiters to specific routes
+    app.use('/api/login', loginLimiter);
+    app.use('/api/rewrite', apiLimiter);
 
     // Auth gate — everything below requires a valid session
     app.use(requireAuth);
