@@ -30,6 +30,10 @@ router.get('/health', (req, res) => {
 router.post('/login', (req, res) => {
     const { username, password } = req.body || {};
 
+    if (!config.authUsername || !config.authPassword) {
+        return res.status(403).json({ error: { message: 'Admin credentials are not configured. Please use Microsoft sign-in.' } });
+    }
+
     if (!username || !password) {
         return res.status(400).json({ error: { message: 'Username and password are required.' } });
     }

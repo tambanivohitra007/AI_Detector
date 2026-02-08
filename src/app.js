@@ -10,6 +10,7 @@ const logger = require('./middleware/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { requireAuth, parseCookies, isValidSession } = require('./middleware/session');
 const apiRoutes = require('./routes/api');
+const authRoutes = require('./routes/auth');
 const config = require('./config/env');
 
 /**
@@ -34,6 +35,9 @@ function createApp() {
         if (isValidSession(cookies.session)) return res.redirect('/');
         res.sendFile(path.join(publicPath, 'login.html'));
     });
+
+    // OAuth routes (public — before auth gate)
+    app.use('/auth', authRoutes);
 
     // Auth gate — everything below requires a valid session
     app.use(requireAuth);
