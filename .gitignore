@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # Environment variables
 .env
@@ -25,3 +24,4 @@ Thumbs.db
 # Build outputs
 dist/
 build/
+nul

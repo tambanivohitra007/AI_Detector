@@ -4,7 +4,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { countWords } from './utils.js';
+import { countWords, sanitizeHTML } from './utils.js';
 
 /**
  * UI Manager class for handling DOM operations
@@ -170,7 +170,7 @@ export class UIManager {
      * @param {string} message - Error message
      */
     showError(message) {
-        this.setOutputHTML(`<span class="text-red-600">An error occurred: ${message}</span>`);
+        this.setOutputHTML(`<span class="text-red-600">An error occurred: ${sanitizeHTML(message)}</span>`);
     }
 
     /**

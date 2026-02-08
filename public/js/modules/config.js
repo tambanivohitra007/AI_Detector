@@ -5,7 +5,7 @@
 
 export const CONFIG = {
     // API Configuration
-    API_URL: "http://10.0.1.7:3000/api/rewrite",
+    API_URL: "/api/rewrite",
     API_TIMEOUT: 60000, // 60 seconds
 
     // Model Settings
