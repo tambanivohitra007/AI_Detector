@@ -149,17 +149,11 @@ fi
 # ── 6. PM2 ────────────────────────────────────────────────
 info "Starting PM2..."
 
-# Resolve full path to pm2 and node (may be under nvm)
-PM2_BIN=$(which pm2)
-NODE_BIN=$(which node)
-NODE_DIR=$(dirname "$NODE_BIN")
-
-su -s /bin/bash "$HESTIA_USER" -c "export PATH=${NODE_DIR}:\$PATH; pm2 delete ${PM2_APP_NAME} 2>/dev/null || true"
-su -s /bin/bash "$HESTIA_USER" -c "export PATH=${NODE_DIR}:\$PATH; cd ${APP_DIR} && PORT=${APP_PORT} NODE_ENV=production pm2 start src/server.js --name ${PM2_APP_NAME}"
-su -s /bin/bash "$HESTIA_USER" -c "export PATH=${NODE_DIR}:\$PATH; pm2 save"
-
-# PM2 startup: auto-restart on reboot
-"$PM2_BIN" startup systemd -u "$HESTIA_USER" --hp "/home/${HESTIA_USER}" 2>/dev/null || true
+# Run PM2 directly as root (rindra can't access root's nvm)
+pm2 delete "$PM2_APP_NAME" 2>/dev/null || true
+cd "$APP_DIR" && PORT="$APP_PORT" NODE_ENV=production pm2 start src/server.js --name "$PM2_APP_NAME"
+pm2 save
+pm2 startup systemd 2>/dev/null || true
 ok "App running"
 
 # ── Done ──────────────────────────────────────────────────
@@ -169,6 +163,7 @@ echo -e "${GREEN}  Live at: https://${DOMAIN}${NC}"
 echo -e "${GREEN}=========================================${NC}"
 echo ""
 echo "  PM2 commands (as root):"
-echo "    su -s /bin/bash ${HESTIA_USER} -c 'export PATH=${NODE_DIR}:\$PATH; pm2 logs ${PM2_APP_NAME}'"
-echo "    su -s /bin/bash ${HESTIA_USER} -c 'export PATH=${NODE_DIR}:\$PATH; pm2 restart ${PM2_APP_NAME}'"
+echo "    pm2 logs ${PM2_APP_NAME}"
+echo "    pm2 restart ${PM2_APP_NAME}"
+echo "    pm2 monit"
 echo ""
