@@ -348,6 +348,16 @@ export class UIManager {
         if (handlers.onLogout) {
             this.elements.logoutBtn.addEventListener('click', handlers.onLogout);
         }
+
+        // Ctrl+Enter / Cmd+Enter to humanize
+        if (handlers.onRewrite) {
+            this.elements.inputText.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    handlers.onRewrite();
+                }
+            });
+        }
     }
 }
 

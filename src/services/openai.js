@@ -97,6 +97,46 @@ class OpenAIService {
 
         return await this.makeRequest(payload);
     }
+
+    /**
+     * Make a streaming request to OpenAI API
+     * Returns the raw response body (a Node.js Readable stream of SSE events).
+     * @param {Object} payload - Request payload (stream flag added automatically)
+     * @returns {Promise<import('node-fetch').Response>} Raw fetch response
+     */
+    async makeStreamingRequest(payload) {
+        const validation = this.validatePayload(payload);
+        if (!validation.valid) {
+            const error = new Error(validation.error);
+            error.status = 400;
+            throw error;
+        }
+
+        const streamPayload = {
+            ...payload,
+            stream: true,
+            stream_options: { include_usage: true }
+        };
+
+        const response = await fetch(this.apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.apiKey}`
+            },
+            body: JSON.stringify(streamPayload),
+            timeout: config.requestTimeout
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            const error = new Error(data.error?.message || 'OpenAI API streaming request failed');
+            error.status = response.status;
+            throw error;
+        }
+
+        return response;
+    }
 }
 
 // Export singleton instance

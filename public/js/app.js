@@ -5,8 +5,9 @@
 
 import { uiManager } from './modules/ui.js';
 import { apiService } from './modules/api.js';
-import { validateText, formatErrorMessage } from './modules/utils.js';
+import { validateText, formatErrorMessage, sanitizeHTML } from './modules/utils.js';
 import { CONFIG } from './modules/config.js';
+import { loadHistory, saveEntry, deleteEntry, clearHistory, timeAgo } from './modules/history.js';
 
 /**
  * Application Controller
@@ -52,6 +53,38 @@ class App {
 
         // Initial word count update
         this.ui.updateWordCount();
+
+        // History panel
+        this.historyToggle = document.getElementById('history-toggle');
+        this.historyChevron = document.getElementById('history-chevron');
+        this.historyPanel = document.getElementById('history-panel');
+        this.historyList = document.getElementById('history-list');
+        this.historyEmpty = document.getElementById('history-empty');
+        this.historyActions = document.getElementById('history-actions');
+        this.historyCount = document.getElementById('history-count');
+
+        this.historyToggle.addEventListener('click', () => {
+            this.historyPanel.classList.toggle('hidden');
+            this.historyChevron.classList.toggle('rotate-180');
+        });
+
+        document.getElementById('history-clear-btn').addEventListener('click', () => {
+            clearHistory();
+            this.renderHistory();
+        });
+
+        this.historyList.addEventListener('click', (e) => {
+            const loadBtn = e.target.closest('[data-history-load]');
+            const delBtn = e.target.closest('[data-history-delete]');
+            if (loadBtn) {
+                this.loadHistoryEntry(loadBtn.dataset.historyLoad);
+            } else if (delBtn) {
+                deleteEntry(delBtn.dataset.historyDelete);
+                this.renderHistory();
+            }
+        });
+
+        this.renderHistory();
 
         console.log('Application initialized successfully');
     }
@@ -137,14 +170,28 @@ class App {
             // Get humanization settings from sliders
             const settings = this.ui.getHumanizationSettings();
 
-            // Call API to humanize text
-            const humanizedText = await this.api.humanizeText(inputText, settings);
+            // Stream humanized text into the output panel
+            this.ui.setOutputText('');
+            this.ui.showStatus('Streaming...', 'info');
+
+            const humanizedText = await this.api.humanizeTextStream(
+                inputText,
+                settings,
+                (textSoFar) => {
+                    this.ui.setOutputText(textSoFar);
+                    this.ui.hideLoading();
+                }
+            );
 
             // Display results
             this.ui.setOutputText(humanizedText);
             this.ui.showCopyButton();
             this.ui.showClearButton();
             this.ui.showStatus('✓ Text successfully humanized!', 'success');
+
+            // Save to history
+            saveEntry(inputText, humanizedText);
+            this.renderHistory();
         } catch (error) {
             console.error('Humanization error:', error);
             const errorMessage = formatErrorMessage(error);
@@ -175,6 +222,51 @@ class App {
      */
     handleClear() {
         this.ui.clearAll();
+    }
+
+    /**
+     * Render the history list
+     */
+    renderHistory() {
+        const entries = loadHistory();
+        this.historyCount.textContent = entries.length ? `(${entries.length})` : '';
+
+        if (entries.length === 0) {
+            this.historyList.innerHTML = '';
+            this.historyEmpty.classList.remove('hidden');
+            this.historyActions.classList.add('hidden');
+            return;
+        }
+
+        this.historyEmpty.classList.add('hidden');
+        this.historyActions.classList.remove('hidden');
+
+        this.historyList.innerHTML = entries.map(e => `
+            <div class="flex items-center justify-between px-4 py-3 hover:bg-gray-50 group">
+                <button data-history-load="${e.id}" class="flex-1 text-left min-w-0">
+                    <p class="text-sm text-gray-800 truncate">${sanitizeHTML(e.input)}</p>
+                    <p class="text-xs text-gray-400 mt-0.5">${timeAgo(e.ts)}</p>
+                </button>
+                <button data-history-delete="${e.id}" class="ml-3 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        `).join('');
+    }
+
+    /**
+     * Load a history entry into the input/output panels
+     * @param {string} id
+     */
+    loadHistoryEntry(id) {
+        const entry = loadHistory().find(e => e.id === id);
+        if (!entry) return;
+        this.ui.elements.inputText.value = entry.input;
+        this.ui.setOutputText(entry.output);
+        this.ui.showCopyButton();
+        this.ui.showClearButton();
+        this.ui.updateWordCount();
+        this.ui.showStatus('Loaded from history', 'info');
     }
 
     /**

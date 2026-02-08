@@ -170,7 +170,7 @@ export class APIService {
     }
 
     /**
-     * Humanize text using API
+     * Humanize text using API (non-streaming fallback)
      * @param {string} text - Text to humanize
      * @param {Object} settings - Humanization settings
      * @returns {Promise<string>} Humanized text
@@ -181,6 +181,73 @@ export class APIService {
         // Pre-fetch a fresh token for the next request
         this.fetchToken().catch(() => {});
         return result;
+    }
+
+    /**
+     * Humanize text with streaming — calls onChunk with accumulated text as it arrives.
+     * @param {string} text - Text to humanize
+     * @param {Object} settings - Humanization settings
+     * @param {function(string): void} onChunk - Called with the full text so far on each chunk
+     * @returns {Promise<string>} Complete humanized text
+     */
+    async humanizeTextStream(text, settings = {}, onChunk) {
+        await this.ensureToken();
+
+        const payload = this.buildPayload(text, settings);
+        payload.stream = true;
+
+        const response = await fetch(this.config.API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Request-Token': this.token,
+                'X-Request-Timestamp': String(this.tokenTimestamp),
+                'X-CSRF-Token': getCsrfToken()
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = '/login';
+                throw new Error('Session expired. Redirecting to login...');
+            }
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error?.message || 'Streaming request failed');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Process complete SSE lines from the buffer
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // keep incomplete line in buffer
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const data = line.slice(6);
+                if (data === '[DONE]') continue;
+                try {
+                    const parsed = JSON.parse(data);
+                    const content = parsed.choices?.[0]?.delta?.content;
+                    if (content) {
+                        fullText += content;
+                        onChunk(fullText);
+                    }
+                } catch { /* partial JSON, skip */ }
+            }
+        }
+
+        this.fetchToken().catch(() => {});
+        return fullText;
     }
 
     /**

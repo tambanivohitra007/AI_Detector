@@ -116,6 +116,60 @@ router.post('/rewrite', requireSignedRequest, async (req, res, next) => {
             if (typeof body[key] === 'number' && isFinite(body[key])) sanitized[key] = body[key];
         }
 
+        // Streaming mode
+        if (body.stream === true) {
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.flushHeaders();
+
+            const streamRes = await openaiService.makeStreamingRequest(sanitized);
+            let usage = null;
+
+            streamRes.body.on('data', (chunk) => {
+                const text = chunk.toString();
+                res.write(text);
+
+                // Extract usage from the final chunk (stream_options: include_usage)
+                const lines = text.split('\n').filter(l => l.startsWith('data: '));
+                for (const line of lines) {
+                    const data = line.slice(6);
+                    if (data === '[DONE]') continue;
+                    try {
+                        const parsed = JSON.parse(data);
+                        if (parsed.usage) usage = parsed.usage;
+                    } catch { /* partial JSON, skip */ }
+                }
+            });
+
+            streamRes.body.on('end', () => {
+                audit.log('rewrite', {
+                    user: audit.userName(req),
+                    ip: audit.ip(req),
+                    model: sanitized.model,
+                    stream: true,
+                    prompt_tokens: usage?.prompt_tokens,
+                    completion_tokens: usage?.completion_tokens,
+                    total_tokens: usage?.total_tokens
+                });
+                res.end();
+            });
+
+            streamRes.body.on('error', (err) => {
+                console.error('Stream error:', err);
+                res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+                res.end();
+            });
+
+            // Handle client disconnect
+            req.on('close', () => {
+                streamRes.body.destroy();
+            });
+
+            return;
+        }
+
+        // Non-streaming mode
         const result = await openaiService.humanizeText(sanitized);
 
         audit.log('rewrite', {

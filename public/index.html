@@ -111,6 +111,28 @@
             </div>
         </div>
 
+        <!-- History Panel -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-2">
+            <button
+                id="history-toggle"
+                class="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors duration-200"
+            >
+                <svg id="history-chevron" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+                History
+                <span id="history-count" class="text-xs text-gray-400"></span>
+            </button>
+
+            <div id="history-panel" class="hidden mt-3 bg-white border border-gray-200 rounded-lg shadow-sm">
+                <div id="history-list" class="max-h-64 overflow-y-auto divide-y divide-gray-100"></div>
+                <div id="history-empty" class="hidden p-4 text-center text-sm text-gray-400">No history yet</div>
+                <div id="history-actions" class="hidden border-t border-gray-200 px-4 py-2 flex justify-end">
+                    <button id="history-clear-btn" class="text-xs text-red-500 hover:text-red-700 font-medium">Clear all history</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
@@ -124,7 +146,7 @@
                         <textarea
                             id="input-text"
                             class="w-full h-full min-h-[500px] p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none font-mono text-sm leading-relaxed"
-                            placeholder="Paste your text here..."
+                            placeholder="Paste your text here... (Ctrl+Enter to humanize)"
                         ></textarea>
                     </div>
                     <div class="border-t border-gray-200 px-6 py-4 bg-gray-50 rounded-b-lg">
