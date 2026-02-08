@@ -37,7 +37,8 @@ export class UIManager {
             perplexitySlider: 'perplexity-slider',
             perplexityValue: 'perplexity-value',
             burstinessSlider: 'burstiness-slider',
-            burstinessValue: 'burstiness-value'
+            burstinessValue: 'burstiness-value',
+            logoutBtn: 'logout-btn'
         };
 
         // Cache all elements with validation
@@ -342,6 +343,10 @@ export class UIManager {
             document.querySelectorAll('.preset-btn').forEach(btn => {
                 btn.addEventListener('click', () => handlers.onPresetClick(btn.dataset.preset));
             });
+        }
+
+        if (handlers.onLogout) {
+            this.elements.logoutBtn.addEventListener('click', handlers.onLogout);
         }
     }
 }

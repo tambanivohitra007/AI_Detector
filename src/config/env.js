@@ -10,7 +10,7 @@ const crypto = require('crypto');
  * Validate required environment variables
  */
 function validateEnv() {
-    const required = ['OPENAI_API_KEY'];
+    const required = ['OPENAI_API_KEY', 'AUTH_USERNAME', 'AUTH_PASSWORD'];
     const missing = required.filter(key => !process.env[key]);
 
     if (missing.length > 0) {
@@ -40,6 +40,11 @@ const config = {
     // Request limits
     requestSizeLimit: process.env.REQUEST_SIZE_LIMIT || '10mb',
     requestTimeout: parseInt(process.env.REQUEST_TIMEOUT || '60000', 10),
+
+    // Authentication
+    authUsername: process.env.AUTH_USERNAME,
+    authPassword: process.env.AUTH_PASSWORD,
+    sessionExpiryMs: parseInt(process.env.SESSION_EXPIRY_MS || '86400000', 10), // 24 hours
 
     // Request signing
     signingSecret: process.env.SIGNING_SECRET || crypto.randomBytes(32).toString('hex'),

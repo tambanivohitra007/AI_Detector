@@ -107,6 +107,11 @@ export class APIService {
                     body: JSON.stringify(payload)
                 });
 
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    throw new Error('Session expired. Redirecting to login...');
+                }
+
                 if (response.ok) {
                     const result = await response.json();
                     return this.extractContent(result);

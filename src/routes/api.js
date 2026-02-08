@@ -6,6 +6,8 @@
 const express = require('express');
 const openaiService = require('../services/openai');
 const { generateToken, requireSignedRequest } = require('../middleware/auth');
+const { createSession, getSessionCookieOptions, safeCompare } = require('../middleware/session');
+const config = require('../config/env');
 
 const router = express.Router();
 
@@ -19,6 +21,35 @@ router.get('/health', (req, res) => {
         timestamp: new Date().toISOString(),
         uptime: process.uptime()
     });
+});
+
+/**
+ * Login endpoint
+ * POST /api/login
+ */
+router.post('/login', (req, res) => {
+    const { username, password } = req.body || {};
+
+    if (!username || !password) {
+        return res.status(400).json({ error: { message: 'Username and password are required.' } });
+    }
+
+    if (safeCompare(username, config.authUsername) && safeCompare(password, config.authPassword)) {
+        const token = createSession();
+        res.cookie('session', token, getSessionCookieOptions());
+        return res.json({ success: true });
+    }
+
+    return res.status(401).json({ error: { message: 'Invalid username or password.' } });
+});
+
+/**
+ * Logout endpoint
+ * POST /api/logout
+ */
+router.post('/logout', (req, res) => {
+    res.clearCookie('session', { path: '/' });
+    res.json({ success: true });
 });
 
 /**

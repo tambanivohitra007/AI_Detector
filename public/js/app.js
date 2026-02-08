@@ -36,7 +36,8 @@ class App {
             onClear: () => this.handleClear(),
             onSettingsToggle: () => this.handleSettingsToggle(),
             onSliderChange: (slider) => this.handleSliderChange(slider),
-            onPresetClick: (preset) => this.handlePresetClick(preset)
+            onPresetClick: (preset) => this.handlePresetClick(preset),
+            onLogout: () => this.handleLogout()
         });
 
         // Apply default preset
@@ -174,6 +175,18 @@ class App {
      */
     handleClear() {
         this.ui.clearAll();
+    }
+
+    /**
+     * Handle logout
+     */
+    async handleLogout() {
+        try {
+            await fetch('/api/logout', { method: 'POST' });
+        } catch {
+            // Proceed to redirect even if the call fails
+        }
+        window.location.href = '/login';
     }
 }
 
