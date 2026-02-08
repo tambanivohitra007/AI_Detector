@@ -8,6 +8,7 @@ const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const corsMiddleware = require('./middleware/cors');
+const csrfProtection = require('./middleware/csrf');
 const logger = require('./middleware/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { requireAuth, parseCookies, isValidSession } = require('./middleware/session');
@@ -44,6 +45,7 @@ function createApp() {
     app.use(express.json({ limit: config.requestSizeLimit }));
     app.use(express.urlencoded({ extended: true, limit: config.requestSizeLimit }));
     app.use(logger);
+    app.use(csrfProtection({ ignorePaths: ['/api/health'] }));
 
     // Rate limiters
     const loginLimiter = rateLimit({

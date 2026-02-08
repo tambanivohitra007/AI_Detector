@@ -5,6 +5,8 @@
 
 require('dotenv').config();
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Validate required environment variables
@@ -39,6 +41,27 @@ function validateEnv() {
 validateEnv();
 
 /**
+ * Read or create a persistent signing secret so sessions survive restarts.
+ * Falls back to a random ephemeral secret if the file can't be written.
+ */
+function getOrCreateSigningSecret() {
+    const secretPath = path.join(__dirname, '..', '..', '.signing-secret');
+    try {
+        return fs.readFileSync(secretPath, 'utf8').trim();
+    } catch {
+        // File doesn't exist — generate and persist
+        const secret = crypto.randomBytes(32).toString('hex');
+        try {
+            fs.writeFileSync(secretPath, secret, { mode: 0o600 });
+            console.log('Generated signing secret and saved to .signing-secret (add this file to .gitignore)');
+        } catch {
+            console.warn('WARNING: Could not persist signing secret. Sessions will be lost on restart. Set SIGNING_SECRET in .env.');
+        }
+        return secret;
+    }
+}
+
+/**
  * Application configuration
  */
 const config = {
@@ -70,7 +93,7 @@ const config = {
     allowedEmailDomain: process.env.ALLOWED_EMAIL_DOMAIN || 'apiu.edu',
 
     // Request signing
-    signingSecret: process.env.SIGNING_SECRET || crypto.randomBytes(32).toString('hex'),
+    signingSecret: process.env.SIGNING_SECRET || getOrCreateSigningSecret(),
     tokenExpiryMs: parseInt(process.env.TOKEN_EXPIRY_MS || '900000', 10), // 15 minutes
 
     // Logging

@@ -90,6 +90,11 @@
         const errorEl = document.getElementById('error-message');
         const btn = document.getElementById('login-btn');
 
+        function getCsrfToken() {
+            const match = document.cookie.split('; ').find(c => c.startsWith('_csrf='));
+            return match ? decodeURIComponent(match.split('=')[1]) : '';
+        }
+
         // Show error from query parameter (e.g. OAuth redirect errors)
         const urlError = new URLSearchParams(window.location.search).get('error');
         if (urlError) {
@@ -106,7 +111,10 @@
             try {
                 const res = await fetch('/api/login', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken()
+                    },
                     body: JSON.stringify({
                         username: document.getElementById('username').value,
                         password: document.getElementById('password').value

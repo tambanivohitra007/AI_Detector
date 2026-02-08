@@ -10,6 +10,15 @@ import { sleep } from './utils.js';
 const REASONING_MODELS = ['o1', 'o1-mini', 'o1-preview', 'o3', 'o3-mini', 'o4-mini', 'gpt-5'];
 
 /**
+ * Read the CSRF double-submit cookie
+ * @returns {string}
+ */
+function getCsrfToken() {
+    const match = document.cookie.split('; ').find(c => c.startsWith('_csrf='));
+    return match ? decodeURIComponent(match.split('=')[1]) : '';
+}
+
+/**
  * API Service class for handling OpenAI requests
  */
 export class APIService {
@@ -102,7 +111,8 @@ export class APIService {
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Request-Token': this.token,
-                        'X-Request-Timestamp': String(this.tokenTimestamp)
+                        'X-Request-Timestamp': String(this.tokenTimestamp),
+                        'X-CSRF-Token': getCsrfToken()
                     },
                     body: JSON.stringify(payload)
                 });

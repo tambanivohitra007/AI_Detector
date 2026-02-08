@@ -182,7 +182,12 @@ class App {
      */
     async handleLogout() {
         try {
-            await fetch('/api/logout', { method: 'POST' });
+            const csrf = document.cookie.split('; ').find(c => c.startsWith('_csrf='));
+            const token = csrf ? decodeURIComponent(csrf.split('=')[1]) : '';
+            await fetch('/api/logout', {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': token }
+            });
         } catch {
             // Proceed to redirect even if the call fails
         }

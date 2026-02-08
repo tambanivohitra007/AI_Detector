@@ -73,15 +73,51 @@ router.get('/token', (req, res) => {
  */
 router.post('/rewrite', requireSignedRequest, async (req, res, next) => {
     try {
+        const body = req.body || {};
+
+        // Validate required fields
+        if (!body.model || typeof body.model !== 'string') {
+            return res.status(400).json({ error: { message: 'Invalid or missing model.' } });
+        }
+        if (!Array.isArray(body.messages) || body.messages.length === 0) {
+            return res.status(400).json({ error: { message: 'Messages must be a non-empty array.' } });
+        }
+        for (const msg of body.messages) {
+            if (!msg || typeof msg.role !== 'string' || typeof msg.content !== 'string') {
+                return res.status(400).json({ error: { message: 'Each message must have a string role and content.' } });
+            }
+        }
+
+        // Build a sanitized payload — only whitelisted fields pass through
+        const sanitized = {
+            model: body.model,
+            messages: body.messages.map(m => ({ role: m.role, content: m.content }))
+        };
+
+        const optionalInt = ['max_completion_tokens'];
+        const optionalStr = ['reasoning_effort', 'verbosity'];
+        const optionalNum = ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty'];
+
+        for (const key of optionalInt) {
+            if (body[key] !== undefined) {
+                const val = Number(body[key]);
+                if (!Number.isInteger(val) || val < 1) continue;
+                sanitized[key] = val;
+            }
+        }
+        for (const key of optionalStr) {
+            if (typeof body[key] === 'string') sanitized[key] = body[key];
+        }
+        for (const key of optionalNum) {
+            if (typeof body[key] === 'number' && isFinite(body[key])) sanitized[key] = body[key];
+        }
+
         console.log('Received rewrite request');
-        console.log('Model:', req.body.model);
+        console.log('Model:', sanitized.model);
 
-        // Call OpenAI service
-        const result = await openaiService.humanizeText(req.body);
-
+        const result = await openaiService.humanizeText(sanitized);
         res.json(result);
     } catch (error) {
-        // Pass error to error handler middleware
         next(error);
     }
 });
