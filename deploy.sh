@@ -4,19 +4,20 @@
 #
 # Usage:
 #   1. SSH into your VPS as root
-#   2. Clone the repo:  git clone <repo-url> /tmp/ai-humanizer
-#   3. Run:  bash /tmp/ai-humanizer/deploy.sh
+#   2. Create the domain in HestiaCP panel first (e.g. generator.rindra.org)
+#   3. Clone the repo into the domain's private/ directory:
+#        cd /home/rindra/web/generator.rindra.org/private
+#        git clone <repo-url> ai-humanizer
+#   4. Run the script:
+#        bash /home/rindra/web/generator.rindra.org/private/ai-humanizer/deploy.sh
 #
-# This script will:
-#   - Install Node.js 20 (if missing)
-#   - Install PM2 globally (if missing)
-#   - Copy app files to /home/rindra/web/generator.rindra.org/nodeapp/
-#   - Install npm dependencies
-#   - Create .env from prompts
-#   - Install custom nginx proxy templates for HestiaCP
-#   - Apply the proxy template to the domain
-#   - Start the app with PM2
-#   - Enable SSL via Let's Encrypt
+# HestiaCP directory structure used:
+#   /home/<user>/web/<domain>/
+#     ├── private/ai-humanizer/   ← App lives here (not web-accessible)
+#     ├── public_html/            ← Unused (nginx proxies to Node)
+#     ├── document_errors/
+#     ├── logs/
+#     └── ...
 #
 
 set -e
@@ -26,11 +27,12 @@ HESTIA_USER="rindra"
 DOMAIN="generator.rindra.org"
 APP_PORT=3000
 NODE_VERSION=20
+PM2_APP_NAME="ai-humanizer"
 
 HOME_DIR="/home/${HESTIA_USER}"
-APP_DIR="${HOME_DIR}/web/${DOMAIN}/nodeapp"
+DOMAIN_DIR="${HOME_DIR}/web/${DOMAIN}"
+APP_DIR="${DOMAIN_DIR}/private/ai-humanizer"
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-TEMPLATE_DIR="/usr/local/hestia/data/templates/web/nginx"
 
 # ── Colors ─────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -54,15 +56,20 @@ if [ ! -d "/usr/local/hestia" ]; then
 fi
 
 if ! id "$HESTIA_USER" &>/dev/null; then
-    fail "User '${HESTIA_USER}' does not exist in HestiaCP."
+    fail "User '${HESTIA_USER}' does not exist."
+fi
+
+if [ ! -d "$DOMAIN_DIR" ]; then
+    fail "Domain directory not found: ${DOMAIN_DIR}\nCreate the domain in HestiaCP panel first."
 fi
 
 echo ""
 echo "=================================================="
 echo "  AI Text Humanizer — HestiaCP Deploy"
-echo "  Domain: ${DOMAIN}"
-echo "  User:   ${HESTIA_USER}"
-echo "  Port:   ${APP_PORT}"
+echo "  Domain:  ${DOMAIN}"
+echo "  User:    ${HESTIA_USER}"
+echo "  App dir: ${APP_DIR}"
+echo "  Port:    ${APP_PORT}"
 echo "=================================================="
 echo ""
 
@@ -95,11 +102,10 @@ else
     ok "PM2 installed"
 fi
 
-# ── Step 3: Create app directory & copy files ──────────────
-info "Setting up app directory at ${APP_DIR}..."
+# ── Step 3: Copy app files to private/ ─────────────────────
+info "Setting up app at ${APP_DIR}..."
 mkdir -p "$APP_DIR"
 
-# Copy project files (exclude node_modules, .git, .env, logs)
 rsync -a --delete \
     --exclude 'node_modules' \
     --exclude '.git' \
@@ -108,7 +114,7 @@ rsync -a --delete \
     --exclude '.signing-secret' \
     "${REPO_DIR}/" "${APP_DIR}/"
 
-ok "Files copied to ${APP_DIR}"
+ok "Files synced to ${APP_DIR}"
 
 # ── Step 4: Install dependencies ──────────────────────────
 info "Installing npm dependencies..."
@@ -118,7 +124,7 @@ ok "Dependencies installed"
 
 # ── Step 5: Create .env if missing ─────────────────────────
 if [ ! -f "${APP_DIR}/.env" ]; then
-    warn ".env file not found — creating one now."
+    warn ".env not found — creating one now."
     echo ""
 
     read -rp "  OpenAI API Key: " OPENAI_KEY
@@ -144,35 +150,65 @@ fi
 
 # ── Step 6: Fix ownership ─────────────────────────────────
 info "Setting file ownership..."
-chown -R "${HESTIA_USER}:${HESTIA_USER}" "$APP_DIR"
+chown -R "${HESTIA_USER}:${HESTIA_USER}" "${DOMAIN_DIR}/private"
 ok "Ownership set to ${HESTIA_USER}"
 
-# ── Step 7: Install nginx proxy templates ──────────────────
-info "Installing nginx proxy templates..."
+# ── Step 7: Detect web stack and install nginx template ────
+info "Detecting HestiaCP web stack..."
 
-cat > "${TEMPLATE_DIR}/nodeapp.tpl" <<'TPLEOF'
+# Determine if this server uses Nginx+Apache or Nginx standalone
+PROXY_SYSTEM=$(grep -oP "^PROXY_SYSTEM='\K[^']*" /usr/local/hestia/conf/hestia.conf 2>/dev/null || echo "")
+WEB_SYSTEM=$(grep -oP "^WEB_SYSTEM='\K[^']*" /usr/local/hestia/conf/hestia.conf 2>/dev/null || echo "")
+
+if [ -n "$PROXY_SYSTEM" ] && [ "$PROXY_SYSTEM" = "nginx" ]; then
+    # Nginx + Apache mode: templates go in nginx/ (proxy templates)
+    TEMPLATE_DIR="/usr/local/hestia/data/templates/web/nginx"
+    LISTEN_PORT="%proxy_port%"
+    LISTEN_SSL_PORT="%proxy_ssl_port%"
+    TPL_COMMAND="v-change-web-domain-proxy-tpl"
+    ok "Detected: Nginx (proxy) + Apache — using proxy templates"
+elif [ "$WEB_SYSTEM" = "nginx" ]; then
+    # Nginx standalone: templates go in nginx/php-fpm/
+    TEMPLATE_DIR="/usr/local/hestia/data/templates/web/nginx/php-fpm"
+    LISTEN_PORT="%web_port%"
+    LISTEN_SSL_PORT="%web_ssl_port%"
+    TPL_COMMAND="v-change-web-domain-tpl"
+    ok "Detected: Nginx standalone — using web templates"
+else
+    # Fallback: assume Nginx + Apache
+    TEMPLATE_DIR="/usr/local/hestia/data/templates/web/nginx"
+    LISTEN_PORT="%proxy_port%"
+    LISTEN_SSL_PORT="%proxy_ssl_port%"
+    TPL_COMMAND="v-change-web-domain-proxy-tpl"
+    warn "Could not detect stack. Assuming Nginx + Apache."
+fi
+
+info "Installing nginx template 'nodeapp' in ${TEMPLATE_DIR}..."
+
+# ── HTTP template ──
+cat > "${TEMPLATE_DIR}/nodeapp.tpl" <<EOF
 server {
-    listen      %ip%:%web_port%;
+    listen      %ip%:${LISTEN_PORT};
     server_name %domain_idn% %alias_idn%;
 
     include %home%/conf/web/%domain%/nginx.forcessl.conf*;
 
     location / {
-        proxy_pass http://127.0.0.1:%backend_port%;
+        proxy_pass         http://127.0.0.1:${APP_PORT};
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
+        proxy_set_header   Upgrade \$http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host \$host;
+        proxy_set_header   X-Real-IP \$remote_addr;
+        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
         proxy_read_timeout 120s;
         proxy_send_timeout 120s;
 
         # SSE support (document humanization progress)
         proxy_buffering off;
-        proxy_cache off;
+        proxy_cache     off;
     }
 
     location /error/ {
@@ -186,11 +222,12 @@ server {
 
     include %home%/conf/web/%domain%/nginx.conf_*;
 }
-TPLEOF
+EOF
 
-cat > "${TEMPLATE_DIR}/nodeapp.stpl" <<'STPLEOF'
+# ── HTTPS template ──
+cat > "${TEMPLATE_DIR}/nodeapp.stpl" <<EOF
 server {
-    listen      %ip%:%web_ssl_port% ssl;
+    listen      %ip%:${LISTEN_SSL_PORT} ssl;
     server_name %domain_idn% %alias_idn%;
 
     ssl_certificate     %ssl_pem%;
@@ -198,27 +235,26 @@ server {
     ssl_stapling        on;
     ssl_stapling_verify on;
 
-    # Security headers
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options    "nosniff" always;
+    add_header X-Frame-Options           "SAMEORIGIN" always;
 
     location / {
-        proxy_pass http://127.0.0.1:%backend_port%;
+        proxy_pass         http://127.0.0.1:${APP_PORT};
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
+        proxy_set_header   Upgrade \$http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host \$host;
+        proxy_set_header   X-Real-IP \$remote_addr;
+        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
         proxy_read_timeout 120s;
         proxy_send_timeout 120s;
 
         # SSE support (document humanization progress)
         proxy_buffering off;
-        proxy_cache off;
+        proxy_cache     off;
     }
 
     location /error/ {
@@ -232,58 +268,48 @@ server {
 
     include %home%/conf/web/%domain%/nginx.ssl.conf_*;
 }
-STPLEOF
+EOF
 
-ok "Nginx templates installed (nodeapp.tpl / nodeapp.stpl)"
+ok "Templates installed: nodeapp.tpl / nodeapp.stpl"
 
-# ── Step 8: Apply template to domain in HestiaCP ──────────
-info "Applying proxy template to ${DOMAIN}..."
+# ── Step 8: Apply template to domain ──────────────────────
+info "Applying 'nodeapp' template to ${DOMAIN}..."
 
-# Check if domain exists in HestiaCP
 if /usr/local/hestia/bin/v-list-web-domain "$HESTIA_USER" "$DOMAIN" &>/dev/null; then
-    # Change the proxy template and set backend port
-    /usr/local/hestia/bin/v-change-web-domain-proxy-tpl "$HESTIA_USER" "$DOMAIN" "nodeapp" "tpl" "stpl"
-    /usr/local/hestia/bin/v-change-web-domain-backend-cfg "$HESTIA_USER" "$DOMAIN" "$APP_PORT" 2>/dev/null || true
-    ok "Proxy template applied"
+    /usr/local/hestia/bin/${TPL_COMMAND} "$HESTIA_USER" "$DOMAIN" "nodeapp"
+    ok "Template applied via ${TPL_COMMAND}"
 else
-    warn "Domain '${DOMAIN}' not found in HestiaCP."
-    warn "Please create it in the HestiaCP panel first, then re-run this script."
-    warn "Or create it now with:"
-    echo "  /usr/local/hestia/bin/v-add-web-domain ${HESTIA_USER} ${DOMAIN}"
+    fail "Domain '${DOMAIN}' not found in HestiaCP. Create it in the panel first."
 fi
 
 # ── Step 9: Enable SSL (Let's Encrypt) ────────────────────
 info "Checking SSL..."
-SSL_STATUS=$(/usr/local/hestia/bin/v-list-web-domain "$HESTIA_USER" "$DOMAIN" json 2>/dev/null | grep -o '"SSL": "[^"]*"' | cut -d'"' -f4 || echo "no")
 
-if [ "$SSL_STATUS" = "no" ] || [ -z "$SSL_STATUS" ]; then
-    info "Requesting Let's Encrypt SSL certificate..."
+# Check if SSL cert already exists for this domain
+if [ -f "${HOME_DIR}/conf/web/${DOMAIN}/ssl/${DOMAIN}.pem" ]; then
+    ok "SSL certificate already exists"
+else
+    info "Requesting Let's Encrypt certificate..."
     /usr/local/hestia/bin/v-add-letsencrypt-domain "$HESTIA_USER" "$DOMAIN" "" "yes" 2>/dev/null && \
         ok "SSL certificate issued" || \
-        warn "SSL request failed. Make sure DNS for ${DOMAIN} points to this server, then run:\n  /usr/local/hestia/bin/v-add-letsencrypt-domain ${HESTIA_USER} ${DOMAIN}"
-else
-    ok "SSL already active"
+        warn "SSL failed. Ensure DNS A record for ${DOMAIN} points to this server, then run:\n  /usr/local/hestia/bin/v-add-letsencrypt-domain ${HESTIA_USER} ${DOMAIN}"
 fi
 
 # ── Step 10: Start app with PM2 ───────────────────────────
 info "Starting app with PM2..."
 
-# Stop existing instance if running
-su - "$HESTIA_USER" -c "pm2 delete ai-humanizer 2>/dev/null || true"
-
-# Start the app
-su - "$HESTIA_USER" -c "cd ${APP_DIR} && pm2 start src/server.js --name ai-humanizer --env production"
-
-# Save PM2 process list so it survives reboot
+su - "$HESTIA_USER" -c "pm2 delete ${PM2_APP_NAME} 2>/dev/null || true"
+su - "$HESTIA_USER" -c "cd ${APP_DIR} && PORT=${APP_PORT} NODE_ENV=production pm2 start src/server.js --name ${PM2_APP_NAME}"
 su - "$HESTIA_USER" -c "pm2 save"
 
-# Set up PM2 startup hook (survives server reboot)
+# PM2 startup: survives server reboot
 env PATH="$PATH:/usr/bin" pm2 startup systemd -u "$HESTIA_USER" --hp "$HOME_DIR" 2>/dev/null || true
 
-ok "App started with PM2"
+ok "App running as PM2 process '${PM2_APP_NAME}'"
 
-# ── Step 11: Restart nginx ────────────────────────────────
-info "Restarting nginx..."
+# ── Step 11: Rebuild web domain & restart nginx ────────────
+info "Rebuilding web config and restarting nginx..."
+/usr/local/hestia/bin/v-rebuild-web-domain "$HESTIA_USER" "$DOMAIN"
 systemctl restart nginx
 ok "Nginx restarted"
 
@@ -292,16 +318,18 @@ echo ""
 echo "=================================================="
 echo -e "  ${GREEN}Deployment complete!${NC}"
 echo ""
-echo "  App:      https://${DOMAIN}"
-echo "  App dir:  ${APP_DIR}"
-echo "  PM2 name: ai-humanizer"
+echo "  URL:       https://${DOMAIN}"
+echo "  App dir:   ${APP_DIR}"
+echo "  PM2 name:  ${PM2_APP_NAME}"
 echo ""
-echo "  Useful commands (run as ${HESTIA_USER}):"
-echo "    pm2 logs ai-humanizer     # View logs"
-echo "    pm2 restart ai-humanizer  # Restart app"
-echo "    pm2 monit                 # Monitor CPU/RAM"
+echo "  Useful commands (as ${HESTIA_USER}):"
+echo "    pm2 logs ${PM2_APP_NAME}"
+echo "    pm2 restart ${PM2_APP_NAME}"
+echo "    pm2 monit"
 echo ""
-echo "  To redeploy after git pull:"
-echo "    sudo bash ${APP_DIR}/deploy.sh"
+echo "  Redeploy after changes:"
+echo "    cd ${APP_DIR} && git pull"
+echo "    npm ci --production"
+echo "    pm2 restart ${PM2_APP_NAME}"
 echo "=================================================="
 echo ""

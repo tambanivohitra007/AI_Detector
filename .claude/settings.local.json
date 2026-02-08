@@ -10,7 +10,8 @@
       "WebFetch(domain:forum.hestiacp.com)",
       "WebFetch(domain:github.com)",
       "Bash(git update-index:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }
